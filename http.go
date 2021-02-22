@@ -203,7 +203,7 @@ func (h HTTP) OnSuccess() error {
 		return h.SuccessFunc(&h)
 
 	}
-	return ErrRetryItNotImplemented
+	return ErrRetryNotImplemented
 }
 
 //OnFailed implement retryit interface
@@ -212,7 +212,7 @@ func (h HTTP) OnFailed(e error) error {
 		h.FailedFunc(&h, e)
 		return nil
 	}
-	return ErrRetryItNotImplemented
+	return ErrRetryNotImplemented
 }
 
 //OnFinalFailed implement retryit interface
@@ -222,7 +222,7 @@ func (h HTTP) OnFinalFailed(e error) error {
 		return nil
 	}
 
-	return ErrRetryItNotImplemented
+	return ErrRetryNotImplemented
 }
 
 //TimeToSleepOnNextFailed implement retryit interface

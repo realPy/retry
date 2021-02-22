@@ -20,7 +20,7 @@ var (
 
 var (
 	//ErrRetryNotImplemented return error when default behaviour
-	ErrRetryItNotImplemented = errors.New("The method is not implemented")
+	ErrRetryNotImplemented = errors.New("The method is not implemented")
 )
 
 //RStore RStore struct
@@ -131,19 +131,19 @@ func (n Node) SetData(value Node) NodeRetry {
 //OnSuccess implement retryit interface
 func (n Node) OnSuccess() error {
 
-	return ErrRetryItNotImplemented
+	return ErrRetryNotImplemented
 }
 
 //OnFailed implement retryit interface
 func (n Node) OnFailed(e error) error {
 
-	return ErrRetryItNotImplemented
+	return ErrRetryNotImplemented
 }
 
 //OnFinalFailed implement retryit interface
 func (n Node) OnFinalFailed(e error) error {
 
-	return ErrRetryItNotImplemented
+	return ErrRetryNotImplemented
 }
 
 //TimeToSleepOnNextFailed implement retryit interface
@@ -357,7 +357,7 @@ func (rq *RetryQueue) addNodeToWaitingList(data interface{}) {
 
 func (rq *RetryQueue) dataRetryNextAttempt(data NodeRetry, err error) {
 
-	if returnSuccess := data.(NodeRetry).OnFailed(err); errors.Is(returnSuccess, ErrRetryItNotImplemented) {
+	if returnSuccess := data.(NodeRetry).OnFailed(err); errors.Is(returnSuccess, ErrRetryNotImplemented) {
 		if failedFunc, ok := rq.registerFailedFunc[reflect.ValueOf(data).Type().String()]; ok {
 			failedFunc(data, err)
 		}
@@ -366,7 +366,7 @@ func (rq *RetryQueue) dataRetryNextAttempt(data NodeRetry, err error) {
 
 	if d.nbretry == (d.MaxRetry - 1) {
 		rq.removeFromPersist(d.uuid)
-		if returnSuccess := data.(NodeRetry).OnFinalFailed(err); errors.Is(returnSuccess, ErrRetryItNotImplemented) {
+		if returnSuccess := data.(NodeRetry).OnFinalFailed(err); errors.Is(returnSuccess, ErrRetryNotImplemented) {
 			if finalFailedFunc, ok := rq.registerFinalFailedFunc[reflect.ValueOf(data).Type().String()]; ok {
 				finalFailedFunc(data, err)
 			}
@@ -441,7 +441,7 @@ loop:
 								if returnSuccess := data.(NodeRetry).OnSuccess(); returnSuccess != nil {
 									retryErr = returnSuccess
 									removeNodeAfterSuccess = false
-									if errors.Is(returnSuccess, ErrRetryItNotImplemented) {
+									if errors.Is(returnSuccess, ErrRetryNotImplemented) {
 										if successFunc, ok := rq.registerSuccessFunc[reflect.ValueOf(data).Type().String()]; ok {
 											if err := successFunc(data); err == nil {
 												removeNodeAfterSuccess = true
