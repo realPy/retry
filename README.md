@@ -25,7 +25,7 @@ import retrydb "github.com/realPy/retry/store/fs"
 
 
 Create the queue
-rq := retry.RetryQueue{}
+rq := retry.Queue{}
 Init you queue wity a storage manager
 rq.Init(retrydb.NewRStoreFS("./spool", "slrx_"))
 

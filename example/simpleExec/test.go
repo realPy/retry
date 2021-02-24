@@ -25,7 +25,7 @@ func MyCustomFinalFailed(i interface{}, e error) {
 
 func main() {
 
-	rq := retry.RetryQueue{}
+	rq := retry.Queue{}
 
 	rq.Init(retrydb.NewRStoreFS("./spool", "slrx_"))
 	//register here global functions

@@ -51,7 +51,7 @@ func main() {
 
 	}))
 
-	rq := retry.RetryQueue{}
+	rq := retry.Queue{}
 
 	rq.Init(retrydb.NewRStoreFS("./spool", "slrx_"))
 
@@ -87,7 +87,7 @@ func main() {
 
 	time.Sleep(30 * time.Second)
 	rq.RemoveByName("call1")
-	fmt.Printf("Remove call1\n")
+	fmt.Printf("Remove call\n")
 
 	time.Sleep(2000 * time.Second)
 

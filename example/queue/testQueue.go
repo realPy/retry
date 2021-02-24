@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"net/http/httptest"
 	_ "net/http/pprof"
@@ -32,20 +31,21 @@ func MyCustomFinalFailed(i interface{}, e error) {
 
 func main() {
 
-	rq := retry.RetryQueue{}
+	rq := retry.Queue{}
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := ioutil.ReadAll(r.Body)
 		fmt.Printf("Server receive data-->%s\n", body)
 		io.WriteString(w, "{\"success\":true}")
+		time.Sleep(200 * time.Second)
 
 	}))
-
-	//collect metric  pprof
-	go func() {
-		log.Println(http.ListenAndServe("localhost:6666", nil))
-	}()
-
+	/*
+		//collect metric  pprof
+		go func() {
+			log.Println(http.ListenAndServe("localhost:6666", nil))
+		}()
+	*/
 	rq.Init(retrydb.NewRStoreFS("./spool", "slrx_"))
 	//enregistrer ici les function de reload pour success
 	rq.Register(retry.HTTP{}, MyCustomSuccess, MyCustomFailed, MyCustomFinalFailed)
@@ -61,7 +61,8 @@ func main() {
 		HTTPHeader:   map[string]string{"User-Agent": "noneman"},
 		WaitingTime:  10,
 	})
+	time.Sleep(2 * time.Second)
+	rq.Stop()
 
-	time.Sleep(2000 * time.Second)
-
+	fmt.Printf("End\n")
 }
