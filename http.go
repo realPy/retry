@@ -2,6 +2,7 @@ package retry
 
 import (
 	"bytes"
+	"context"
 	"encoding/gob"
 	"fmt"
 	"net/http"
@@ -128,7 +129,7 @@ func (h HTTP) Init() {
 }
 
 //Execute implement retryit interface
-func (h HTTP) Execute() error {
+func (h HTTP) Execute(ctx context.Context) error {
 
 	var postStrEncode = ""
 	var getStrEncode = ""
@@ -151,7 +152,8 @@ func (h HTTP) Execute() error {
 
 		u.RawQuery = getStrEncode
 		client := &http.Client{}
-		r, err = http.NewRequest(h.Method, u.String(), strings.NewReader(postStrEncode)) // URL-encoded payload
+
+		r, err = http.NewRequestWithContext(ctx, h.Method, u.String(), strings.NewReader(postStrEncode)) // URL-encoded payload
 		if err != nil {
 			return err
 		}

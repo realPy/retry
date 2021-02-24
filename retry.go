@@ -3,6 +3,7 @@ package retry
 import (
 	"bytes"
 	"container/list"
+	"context"
 	"encoding/gob"
 	"errors"
 	"fmt"
@@ -33,7 +34,7 @@ type RStore interface {
 //NodeRetry NodeRetry struct
 type NodeRetry interface {
 	Init()
-	Execute() error
+	Execute(context.Context) error
 	GetData() Node
 	SetData(Node) NodeRetry
 	OnSuccess() error
@@ -42,8 +43,8 @@ type NodeRetry interface {
 	OnFinalFailed(error) error
 }
 
-//RetryQueue RetryQueue struct
-type RetryQueue struct {
+//Queue Queue struct
+type Queue struct {
 	//waitingList             []NodeRetry
 	waitingNodeList         *list.List
 	registerSuccessFunc     map[string]func(interface{}) error
@@ -55,6 +56,7 @@ type RetryQueue struct {
 	store                   RStore
 	nextTriggerTime         time.Time
 	latency                 int
+	cancel                  context.CancelFunc
 }
 
 //delayedNode delayedNode struct
@@ -85,6 +87,7 @@ type Node struct {
 	nbretry         int
 	stackOnPush     bool
 	nextTriggerTime time.Time
+	cancel          context.CancelFunc
 }
 
 //MarshalBinary implement marshal
@@ -112,7 +115,7 @@ func (n Node) Init() {
 }
 
 //Execute implement retryit interface
-func (n Node) Execute() error {
+func (n Node) Execute(ctx context.Context) error {
 	return nil
 }
 
@@ -234,7 +237,7 @@ func (n *Node) NodeGobDecode(dec *gob.Decoder) error {
 }
 
 //Register Register default for type
-func (rq *RetryQueue) Register(i interface{}, success func(interface{}) error, failed func(interface{}, error), finalFailed func(interface{}, error)) {
+func (rq *Queue) Register(i interface{}, success func(interface{}) error, failed func(interface{}, error), finalFailed func(interface{}, error)) {
 	if i != nil {
 		gob.Register(i)
 		i.(NodeRetry).Init()
@@ -253,7 +256,7 @@ func (rq *RetryQueue) Register(i interface{}, success func(interface{}) error, f
 }
 
 //loadPersist Load the persist data
-func (rq *RetryQueue) loadPersist() {
+func (rq *Queue) loadPersist() {
 	rq.store.ParseAll(func(key string, data []byte) error {
 
 		buffer := bytes.Buffer{}
@@ -275,11 +278,12 @@ func (rq *RetryQueue) loadPersist() {
 }
 
 //Init init queue and store
-func (rq *RetryQueue) Init(store RStore) {
+func (rq *Queue) Init(store RStore) {
 	var wg sync.WaitGroup
 	rq.wg = &wg
 	rq.waitingNodeList = list.New()
 	rq.io = make(chan interface{})
+	rq.stop = make(chan bool)
 	rq.registerSuccessFunc = make(map[string]func(interface{}) error)
 	rq.registerFailedFunc = make(map[string]func(interface{}, error))
 	rq.registerFinalFailedFunc = make(map[string]func(interface{}, error))
@@ -289,7 +293,7 @@ func (rq *RetryQueue) Init(store RStore) {
 }
 
 //Start Load in store and run loop
-func (rq *RetryQueue) Start() {
+func (rq *Queue) Start() {
 
 	rq.loadPersist()
 
@@ -301,16 +305,16 @@ func (n Node) String() string {
 }
 
 //RemoveByName Remove a node by name
-func (rq *RetryQueue) RemoveByName(name string) {
+func (rq *Queue) RemoveByName(name string) {
 	rq.EnqueueExecAndRetry(NodeRemove{name: name})
 }
 
-func (rq *RetryQueue) removeFromPersist(uuid string) error {
+func (rq *Queue) removeFromPersist(uuid string) error {
 	return rq.Persist(uuid, nil)
 }
 
 //Persist save all queue on storage
-func (rq *RetryQueue) Persist(uuid string, data interface{}) error {
+func (rq *Queue) Persist(uuid string, data interface{}) error {
 
 	if data == nil {
 		return rq.store.Delete(uuid)
@@ -334,7 +338,7 @@ func (rq *RetryQueue) Persist(uuid string, data interface{}) error {
 
 }
 
-func (rq *RetryQueue) addNodeToWaitingList(data interface{}) {
+func (rq *Queue) addNodeToWaitingList(data interface{}) {
 
 	if rq.waitingNodeList.Front() == nil {
 		rq.waitingNodeList.PushFront(data)
@@ -355,7 +359,7 @@ func (rq *RetryQueue) addNodeToWaitingList(data interface{}) {
 
 }
 
-func (rq *RetryQueue) dataRetryNextAttempt(data NodeRetry, err error) {
+func (rq *Queue) dataRetryNextAttempt(data NodeRetry, err error) {
 
 	if returnSuccess := data.(NodeRetry).OnFailed(err); errors.Is(returnSuccess, ErrRetryNotImplemented) {
 		if failedFunc, ok := rq.registerFailedFunc[reflect.ValueOf(data).Type().String()]; ok {
@@ -369,6 +373,10 @@ func (rq *RetryQueue) dataRetryNextAttempt(data NodeRetry, err error) {
 		if returnSuccess := data.(NodeRetry).OnFinalFailed(err); errors.Is(returnSuccess, ErrRetryNotImplemented) {
 			if finalFailedFunc, ok := rq.registerFinalFailedFunc[reflect.ValueOf(data).Type().String()]; ok {
 				finalFailedFunc(data, err)
+				if data.GetData().cancel != nil {
+					data.GetData().cancel()
+				}
+
 			}
 		}
 
@@ -387,12 +395,19 @@ func (rq *RetryQueue) dataRetryNextAttempt(data NodeRetry, err error) {
 
 }
 
-func (rq *RetryQueue) runLoop() {
+func (rq *Queue) runLoop() {
+
+	ctx := context.Background()
+	ctx, cancel := context.WithCancel(ctx)
+	rq.cancel = cancel
 
 loop:
 	for {
 		select {
 		case <-rq.stop:
+			fmt.Printf("want cancel...\n")
+			rq.cancel()
+			fmt.Printf("cancel...\n")
 			break loop
 		case data, ok := <-rq.io:
 			if ok {
@@ -432,10 +447,14 @@ loop:
 					} else {
 						rq.wg.Add(1)
 
+						nodectx, nodecancel := context.WithCancel(ctx)
+						d.cancel = nodecancel
+						data = data.(NodeRetry).SetData(d)
+
 						go func() {
 							defer rq.wg.Done()
-
-							if err := data.(NodeRetry).Execute(); err == nil {
+							defer nodecancel()
+							if err := data.(NodeRetry).Execute(nodectx); err == nil {
 								var retryErr error
 								removeNodeAfterSuccess := true
 								if returnSuccess := data.(NodeRetry).OnSuccess(); returnSuccess != nil {
@@ -495,7 +514,7 @@ loop:
 }
 
 //EnqueueExecAndRetry Enqueue node and exec
-func (rq *RetryQueue) EnqueueExecAndRetry(n interface{}) {
+func (rq *Queue) EnqueueExecAndRetry(n interface{}) {
 
 	go func() {
 		rq.io <- n
@@ -503,6 +522,8 @@ func (rq *RetryQueue) EnqueueExecAndRetry(n interface{}) {
 }
 
 //Stop Enqueue Stop the current queue
-func (rq *RetryQueue) Stop() {
+func (rq *Queue) Stop() {
+	fmt.Printf("Ask stop\n")
 	rq.stop <- true
+	rq.wg.Wait()
 }
