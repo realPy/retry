@@ -405,9 +405,7 @@ loop:
 	for {
 		select {
 		case <-rq.stop:
-			fmt.Printf("want cancel...\n")
 			rq.cancel()
-			fmt.Printf("cancel...\n")
 			break loop
 		case data, ok := <-rq.io:
 			if ok {
@@ -523,7 +521,6 @@ func (rq *Queue) EnqueueExecAndRetry(n interface{}) {
 
 //Stop Enqueue Stop the current queue
 func (rq *Queue) Stop() {
-	fmt.Printf("Ask stop\n")
 	rq.stop <- true
 	rq.wg.Wait()
 }
