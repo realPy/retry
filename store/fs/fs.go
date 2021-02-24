@@ -10,11 +10,13 @@ import (
 	"strings"
 )
 
+//RStoreFS RStoreFS struct
 type RStoreFS struct {
 	path   string
 	prefix string
 }
 
+//NewRStoreFS return a NewRStoreFS instannce
 func NewRStoreFS(path string, prefix string) RStoreFS {
 	if err := os.MkdirAll(path, 0700); err != nil {
 		panic(err)
@@ -23,6 +25,7 @@ func NewRStoreFS(path string, prefix string) RStoreFS {
 	return r
 }
 
+//Delete Delete the element in store
 func (r RStoreFS) Delete(uuid string) error {
 
 	filename := fmt.Sprintf("%s%s", r.prefix, uuid)
@@ -30,9 +33,12 @@ func (r RStoreFS) Delete(uuid string) error {
 
 }
 
+//Store store the element in store
 func (r RStoreFS) Store(uuid string, getData func() (*bytes.Buffer, error)) error {
 
-	if b, err := getData(); err == nil {
+	var err error
+	var b *bytes.Buffer
+	if b, err = getData(); err == nil {
 
 		filename := fmt.Sprintf("%s%s", r.prefix, uuid)
 
@@ -40,13 +46,13 @@ func (r RStoreFS) Store(uuid string, getData func() (*bytes.Buffer, error)) erro
 
 		return err
 
-	} else {
-		return err
 	}
 
-	return nil
+	return err
+
 }
 
+//ParseAll parse all element with callback parseData
 func (r RStoreFS) ParseAll(parseData func(string, []byte) error) {
 
 	filepath.Walk(r.path, func(pathname string, info os.FileInfo, err error) error {
