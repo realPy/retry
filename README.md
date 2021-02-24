@@ -79,7 +79,7 @@ Implement the nodeRetry interface and voila :)
 
 type NodeRetry interface {
 	Init()
-	Execute() error
+	Execute(ctx context.Context) error
 	GetData() Node
 	SetData(Node) NodeRetry
 	OnSuccess() error
