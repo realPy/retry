@@ -1,0 +1,6 @@
+Intégrer les context pour cancel les executions
+
+https://golang.org/pkg/context/
+
+
+https://golang.org/pkg/os/exec/#CommandContext
